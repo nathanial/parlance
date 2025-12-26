@@ -1,0 +1,146 @@
+/-
+  Parlance.Command.Help - Automatic help text generation
+-/
+
+import Parlance.Core.Types
+import Parlance.Style.Styled
+import Parlance.Style.Semantic
+
+namespace Parlance
+
+open Style
+
+/-- Configuration for help text generation -/
+structure HelpConfig where
+  /-- Width of the help text (for wrapping) -/
+  width : Nat := 80
+  /-- Indent for descriptions -/
+  indent : Nat := 2
+  /-- Column where descriptions start -/
+  descColumn : Nat := 24
+  /-- Use colors in output -/
+  useColors : Bool := true
+  deriving Inhabited
+
+/-- Format a flag for help display -/
+private def formatFlag (f : Flag) (config : HelpConfig) : String :=
+  let shortStr := match f.short with
+    | some c => s!"-{c}, "
+    | none => "    "
+  let longStr := s!"--{f.long}"
+  let typeStr := match f.argType with
+    | some t => s!" <{t}>"
+    | none => ""
+  let pref := s!"{shortStr}{longStr}{typeStr}"
+  let padding := if pref.length < config.descColumn
+    then String.mk (List.replicate (config.descColumn - pref.length) ' ')
+    else ""
+  let paddedPref := pref ++ padding
+  if f.description.isEmpty then
+    s!"  {pref}"
+  else if pref.length >= config.descColumn then
+    s!"  {pref}\n{String.mk (List.replicate (config.descColumn + 2) ' ')}{f.description}"
+  else
+    s!"  {paddedPref}{f.description}"
+
+/-- Format a positional argument for help display -/
+private def formatArg (a : Arg) (config : HelpConfig) : String :=
+  let reqStr := if a.required then "" else " (optional)"
+  let nameStr := s!"<{a.name}>"
+  let pref := nameStr
+  let padding := if pref.length < config.descColumn
+    then String.mk (List.replicate (config.descColumn - pref.length) ' ')
+    else ""
+  let paddedPref := pref ++ padding
+  if a.description.isEmpty then
+    s!"  {pref}{reqStr}"
+  else if pref.length >= config.descColumn then
+    s!"  {pref}\n{String.mk (List.replicate (config.descColumn + 2) ' ')}{a.description}{reqStr}"
+  else
+    s!"  {paddedPref}{a.description}{reqStr}"
+
+/-- Format a subcommand for help display -/
+private def formatSubcmd (c : Command) (config : HelpConfig) : String :=
+  let pref := c.name
+  let padding := if pref.length < config.descColumn
+    then String.mk (List.replicate (config.descColumn - pref.length) ' ')
+    else ""
+  let paddedPref := pref ++ padding
+  if c.description.isEmpty then
+    s!"  {pref}"
+  else if pref.length >= config.descColumn then
+    s!"  {pref}\n{String.mk (List.replicate (config.descColumn + 2) ' ')}{c.description}"
+  else
+    s!"  {paddedPref}{c.description}"
+
+/-- Generate usage string for a command -/
+def Command.usage (cmd : Command) (programName : Option String := none) : String :=
+  let name := programName.getD cmd.name
+  let flagStr := if cmd.flags.isEmpty then "" else " [OPTIONS]"
+  let subcmdStr := if cmd.subcommands.isEmpty then "" else " <COMMAND>"
+  let argStr := cmd.args.toList.map (fun a =>
+    if a.required then s!"<{a.name}>" else s!"[{a.name}]"
+  ) |> " ".intercalate
+  let argPart := if argStr.isEmpty then "" else s!" {argStr}"
+  s!"{name}{flagStr}{subcmdStr}{argPart}"
+
+/-- Generate full help text for a command -/
+def Command.helpText (cmd : Command) (config : HelpConfig := {}) : String :=
+  -- Description section
+  let descLines :=
+    if cmd.description.isEmpty then []
+    else [cmd.description, ""]
+
+  -- Usage section
+  let usageLines := [s!"Usage: {cmd.usage}", ""]
+
+  -- Arguments section
+  let argsLines :=
+    if cmd.args.isEmpty then []
+    else
+      let formatted := cmd.args.toList.map (formatArg · config)
+      ["Arguments:"] ++ formatted ++ [""]
+
+  -- Options section
+  let optsLines :=
+    if cmd.flags.isEmpty then []
+    else
+      let formatted := cmd.flags.toList.map (formatFlag · config)
+      let helpPadding := String.mk (List.replicate (config.descColumn - 12) ' ')
+      let helpLine := s!"  -h, --help{helpPadding}Print help"
+      let versionLine :=
+        if cmd.version.isEmpty then []
+        else
+          let vPadding := String.mk (List.replicate (config.descColumn - 15) ' ')
+          [s!"  -V, --version{vPadding}Print version"]
+      ["Options:"] ++ formatted ++ [helpLine] ++ versionLine ++ [""]
+
+  -- Commands section
+  let cmdsLines :=
+    if cmd.subcommands.isEmpty then []
+    else
+      let formatted := cmd.subcommands.toList.map (formatSubcmd · config)
+      ["Commands:"] ++ formatted ++ [""]
+
+  "\n".intercalate (descLines ++ usageLines ++ argsLines ++ optsLines ++ cmdsLines)
+
+/-- Print help text to stdout -/
+def Command.printHelp (cmd : Command) (config : HelpConfig := {}) : IO Unit :=
+  IO.println (cmd.helpText config)
+
+/-- Print version to stdout -/
+def Command.printVersion (cmd : Command) : IO Unit := do
+  if cmd.version.isEmpty then
+    IO.println s!"{cmd.name}"
+  else
+    IO.println s!"{cmd.name} {cmd.version}"
+
+/-- Generate help text for a specific subcommand path -/
+def Command.helpTextForPath (cmd : Command) (path : List String) (config : HelpConfig := {}) : Option String :=
+  match path with
+  | [] => some (cmd.helpText config)
+  | name :: rest =>
+    cmd.findSubcommand name >>= fun subcmd =>
+      subcmd.helpTextForPath rest config
+
+end Parlance
