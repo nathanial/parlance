@@ -10,6 +10,7 @@ import Parlance.Repl.Terminal
 import Parlance.Repl.Input
 import Parlance.Repl.LineBuffer
 import Parlance.Style.Ansi
+import Chronicle
 
 namespace Parlance.Repl
 
@@ -21,7 +22,8 @@ structure ReplConfig where
   prompt : IO String := pure "> "
   /-- Called when Ctrl+C is pressed. Return true to exit, false to continue. -/
   onInterrupt : IO Bool := pure false
-  deriving Inhabited
+  /-- Optional logger for REPL events -/
+  logger : Option Chronicle.Logger := none
 
 /-- Internal state during line reading -/
 private structure ReadState where
@@ -195,22 +197,37 @@ partial def readLine (config : ReplConfig := {}) : IO (Option String) := do
 /-- Run an interactive REPL session.
     The handler receives each line and returns true to exit, false to continue. -/
 partial def run (config : ReplConfig := {}) (handler : String → IO Bool) : IO Unit := do
+  -- Log REPL start
+  if let some logger := config.logger then
+    logger.debug "REPL session started"
+
   let rec loop : IO Unit := do
     match ← readLine config with
     | none =>
       -- EOF (Ctrl+D on empty line)
+      if let some logger := config.logger then
+        logger.debug "REPL session ended (EOF)"
       pure ()
     | some line =>
       if line.isEmpty then
         loop  -- Skip empty lines
       else
+        -- Log input (at trace level to avoid logging sensitive data at higher levels)
+        if let some logger := config.logger then
+          if line.startsWith "/" then
+            logger.debug s!"REPL command: {line}"
+          else
+            logger.trace s!"REPL input: {line.length} chars"
         let shouldExit ← handler line
-        if shouldExit then pure ()
+        if shouldExit then
+          if let some logger := config.logger then
+            logger.debug "REPL session ended (handler exit)"
+          pure ()
         else loop
   loop
 
 /-- Simple REPL with a fixed prompt string -/
-def simple (prompt : String := "> ") (handler : String → IO Bool) : IO Unit :=
-  run { prompt := pure prompt } handler
+def simple (prompt : String := "> ") (logger : Option Chronicle.Logger := none) (handler : String → IO Bool) : IO Unit :=
+  run { prompt := pure prompt, logger := logger } handler
 
 end Parlance.Repl

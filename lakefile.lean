@@ -7,6 +7,7 @@ package parlance where
 
 require crucible from ".." / "crucible"
 require staple from ".." / "staple"
+require chronicle from ".." / "chronicle"
 
 @[default_target]
 lean_lib Parlance where
