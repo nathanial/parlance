@@ -6,21 +6,46 @@ This document outlines potential improvements, new features, and code cleanup op
 
 ## Feature Proposals
 
-### [Priority: High] Shell Completion Generation
+### [COMPLETED] Shell Completion Generation
 
-**Description:** Generate shell completion scripts for Bash, Zsh, Fish, and PowerShell from command definitions.
+**Status:** Implemented
 
-**Rationale:** Shell completions are a standard feature in production CLI tools. They significantly improve user experience by allowing tab-completion of commands, flags, and arguments.
+**Description:** Generate shell completion scripts for Bash, Zsh, and Fish from command definitions.
 
-**Affected Files:**
-- New file: `Parlance/Completion/Bash.lean`
-- New file: `Parlance/Completion/Zsh.lean`
-- New file: `Parlance/Completion/Fish.lean`
-- `Parlance/Core/Types.lean` (add completion hints to Flag/Arg)
+**Implementation:**
+- `Parlance/Completion/Core.lean` - Shell enum, escape helpers, flag/subcommand extraction
+- `Parlance/Completion/Bash.lean` - Bash script generation with `compgen` and case statements
+- `Parlance/Completion/Zsh.lean` - Zsh script generation with `_arguments` and `#compdef`
+- `Parlance/Completion/Fish.lean` - Fish script generation with `complete -c`
+- `Parlance/Completion.lean` - Top-level API (`generateScript`, `handleCompletionRequest`)
 
-**Estimated Effort:** Medium
+**Usage:**
+```lean
+def main (args : List String) : IO UInt32 := do
+  let cmd := command "myapp" do
+    Cmd.boolFlag "verbose" (short := some 'v')
+    Cmd.flag "format" (argType := .choice ["json", "yaml"])
 
-**Dependencies:** None
+  -- Handle completion before parsing
+  if let some action := Completion.handleCompletionRequest cmd "myapp" args then
+    action
+    return 0
+  -- Normal parsing...
+```
+
+**User installation:**
+```bash
+myapp --generate-completion bash > ~/.bash_completion.d/myapp
+myapp --generate-completion zsh > ~/.zsh/completions/_myapp
+myapp --generate-completion fish > ~/.config/fish/completions/myapp.fish
+```
+
+**Features:**
+- Completes command names, subcommand names, flag names (long and short)
+- `ArgType.path` triggers file completion in all shells
+- `ArgType.choice` provides enumerated value completions
+- `ArgType.bool` suggests true/false/yes/no values
+- Nested subcommand support with per-subcommand flag completions
 
 ---
 
@@ -150,13 +175,23 @@ This document outlines potential improvements, new features, and code cleanup op
 
 **Rationale:** Shell completions can suggest valid values (file paths, enum values, etc.) if the CLI provides hints.
 
+**Current State:** Basic completion hints are already supported via `ArgType`:
+- `ArgType.path` - triggers file completion
+- `ArgType.choice` - provides enumerated values
+- `ArgType.bool` - suggests true/false/yes/no
+
+**Proposed Enhancement:** Add explicit `CompletionHint` type for advanced patterns:
+- Directory-only completion
+- Custom shell commands for dynamic completions
+- Glob patterns for file filtering
+
 **Affected Files:**
 - `Parlance/Core/Types.lean` (add `completionHint : Option CompletionHint` to Flag)
-- New type for completion hints (files, directories, enum values, custom)
+- `Parlance/Completion/*.lean` (handle new hint types)
 
 **Estimated Effort:** Small
 
-**Dependencies:** Shell Completion Generation feature
+**Dependencies:** ✓ Shell Completion Generation (completed)
 
 ---
 

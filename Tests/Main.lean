@@ -4,6 +4,7 @@
 
 import Crucible
 import Parlance
+import Staple
 
 open Crucible
 open Parlance
@@ -198,6 +199,153 @@ test "Table.simple creation" := do
 #generate_tests
 
 end Tests.Tables
+
+-- Completion Tests
+namespace Tests.Completion
+
+open Parlance.Completion
+open Staple (String.containsSubstr)
+
+testSuite "Completion"
+
+-- Helper test command
+def testCmd : Command := command "myapp" do
+  Cmd.version "1.0.0"
+  Cmd.description "A test application"
+  Cmd.boolFlag "verbose" (short := some 'v') (description := "Enable verbose output")
+  Cmd.flag "output" (short := some 'o') (argType := .path) (description := "Output file")
+  Cmd.flag "format" (argType := .choice ["json", "yaml", "toml"]) (description := "Output format")
+  Cmd.subcommand "init" do
+    Cmd.description "Initialize a new project"
+    Cmd.boolFlag "force" (description := "Force initialization")
+  Cmd.subcommand "build" do
+    Cmd.description "Build the project"
+    Cmd.flag "target" (argType := .string) (description := "Build target")
+
+test "Shell.fromString parses bash" :=
+  Shell.fromString "bash" ≡ some .bash
+
+test "Shell.fromString parses zsh" :=
+  Shell.fromString "zsh" ≡ some .zsh
+
+test "Shell.fromString parses fish" :=
+  Shell.fromString "fish" ≡ some .fish
+
+test "Shell.fromString is case insensitive" :=
+  Shell.fromString "BASH" ≡ some .bash
+
+test "Shell.fromString returns none for invalid" := do
+  shouldBeNone (Shell.fromString "invalid")
+  shouldBeNone (Shell.fromString "")
+
+test "Shell.toString roundtrips" := do
+  Shell.bash.toString ≡ "bash"
+  Shell.zsh.toString ≡ "zsh"
+  Shell.fish.toString ≡ "fish"
+
+test "flagCompletions includes long forms" := do
+  let flags := flagCompletions testCmd
+  shouldSatisfy (flags.contains "--verbose") "should contain --verbose"
+  shouldSatisfy (flags.contains "--output") "should contain --output"
+  shouldSatisfy (flags.contains "--format") "should contain --format"
+
+test "flagCompletions includes short forms" := do
+  let flags := flagCompletions testCmd
+  shouldSatisfy (flags.contains "-v") "should contain -v"
+  shouldSatisfy (flags.contains "-o") "should contain -o"
+
+test "subcommandCompletions lists subcommands" := do
+  let subcmds := subcommandCompletions testCmd
+  subcmds ≡ ["init", "build"]
+
+test "escapeForShell escapes single quotes" :=
+  escapeForShell "it's" ≡ "it'\\''s"
+
+test "escapeForShell handles no quotes" :=
+  escapeForShell "hello world" ≡ "hello world"
+
+test "Bash script contains function definition" := do
+  let script := Bash.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "_myapp_completions()") "should define completion function"
+
+test "Bash script contains complete command" := do
+  let script := Bash.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "complete -F _myapp_completions myapp") "should register completion"
+
+test "Bash script includes flags" := do
+  let script := Bash.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "--verbose") "should include verbose flag"
+  shouldSatisfy (script.containsSubstr "--output") "should include output flag"
+
+test "Bash script includes choice options" := do
+  let script := Bash.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "json yaml toml") "should include choice options"
+
+test "Bash script includes subcommands" := do
+  let script := Bash.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "init") "should include init subcommand"
+  shouldSatisfy (script.containsSubstr "build") "should include build subcommand"
+
+test "Zsh script contains compdef" := do
+  let script := Zsh.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "#compdef myapp") "should have compdef header"
+
+test "Zsh script contains function definition" := do
+  let script := Zsh.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "_myapp()") "should define completion function"
+
+test "Zsh script includes _files for path type" := do
+  let script := Zsh.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "_files") "should use _files for path completion"
+
+test "Fish script uses complete command" := do
+  let script := Fish.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "complete -c myapp") "should use complete -c command"
+
+test "Fish script includes long flag" := do
+  let script := Fish.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "-l verbose") "should include long flag"
+
+test "Fish script includes short flag" := do
+  let script := Fish.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "-s v") "should include short flag"
+
+test "Fish script includes subcommands" := do
+  let script := Fish.generateScript testCmd "myapp"
+  shouldSatisfy (script.containsSubstr "-a 'init'") "should complete init subcommand"
+  shouldSatisfy (script.containsSubstr "-a 'build'") "should complete build subcommand"
+
+test "generateScript dispatches to bash" := do
+  let script := generateScript testCmd "myapp" .bash
+  shouldSatisfy (script.containsSubstr "complete -F") "bash uses complete -F"
+
+test "generateScript dispatches to zsh" := do
+  let script := generateScript testCmd "myapp" .zsh
+  shouldSatisfy (script.containsSubstr "#compdef") "zsh uses #compdef"
+
+test "generateScript dispatches to fish" := do
+  let script := generateScript testCmd "myapp" .fish
+  shouldSatisfy (script.containsSubstr "complete -c") "fish uses complete -c"
+
+test "handleCompletionRequest returns some for valid request" := do
+  let result := handleCompletionRequest testCmd "myapp" ["--generate-completion", "bash"]
+  shouldSatisfy result.isSome "should return some for valid request"
+
+test "handleCompletionRequest returns none for missing flag" := do
+  let result := handleCompletionRequest testCmd "myapp" ["--verbose", "file.txt"]
+  shouldSatisfy result.isNone "should return none when flag not present"
+
+test "handleCompletionRequest returns none for missing shell arg" := do
+  let result := handleCompletionRequest testCmd "myapp" ["--generate-completion"]
+  shouldSatisfy result.isNone "should return none when shell arg missing"
+
+test "handleCompletionRequest returns none for invalid shell" := do
+  let result := handleCompletionRequest testCmd "myapp" ["--generate-completion", "invalid"]
+  shouldSatisfy result.isNone "should return none for invalid shell"
+
+#generate_tests
+
+end Tests.Completion
 
 -- Main test runner
 def main : IO UInt32 := do

@@ -13,3 +13,4 @@ import Parlance.Style
 import Parlance.Command
 import Parlance.Parse
 import Parlance.Output
+import Parlance.Completion
