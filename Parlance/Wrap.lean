@@ -3,9 +3,19 @@
 
   Wraps text at word boundaries without splitting words.
   Handles ANSI escape codes correctly (doesn't count them toward line width).
+  Supports both CSI sequences (\x1b[...m) and OSC sequences (\x1b]...\x1b\\).
 -/
 
 namespace Parlance.Wrap
+
+/-- Type of escape sequence we're currently in -/
+inductive EscapeType where
+  | none       -- Not in escape sequence
+  | sawEsc     -- Saw ESC, waiting for [ or ]
+  | csi        -- In CSI sequence \x1b[..., ends with alpha
+  | osc        -- In OSC sequence \x1b]..., ends with ST
+  | oscSawEsc  -- In OSC, saw ESC, next char might be \ for ST
+  deriving Repr, BEq, Inhabited
 
 /-- State for streaming word wrapper -/
 structure State where
@@ -13,28 +23,58 @@ structure State where
   linePos : Nat := 0        -- Current visual position on line
   wordBuffer : String := "" -- Current word being accumulated
   wordVisualLen : Nat := 0  -- Visual length of word (excluding ANSI codes)
-  inEscape : Bool := false  -- Currently inside an ANSI escape sequence
+  escapeType : EscapeType := .none  -- Current escape sequence state
   deriving Repr, Inhabited
 
 def State.new (maxWidth : Nat := 80) : State :=
   { maxWidth := maxWidth }
 
-/-- Check if we're starting an ANSI escape sequence -/
-def isEscapeStart (c : Char) : Bool := c == '\x1b'
-
 /-- Process a single character, updating state and returning output -/
 def step (s : State) (c : Char) : State × String := Id.run do
-  -- Handle ANSI escape sequences
-  if s.inEscape then
-    -- Still in escape sequence, add to word buffer but don't count width
+  -- Handle escape sequences based on current state
+  match s.escapeType with
+  | .sawEsc =>
     let newBuffer := s.wordBuffer.push c
-    -- Escape sequences end with a letter (typically 'm' for SGR)
-    let stillInEscape := !c.isAlpha
-    return ({ s with wordBuffer := newBuffer, inEscape := stillInEscape }, "")
+    if c == '[' then
+      -- CSI sequence starting
+      return ({ s with wordBuffer := newBuffer, escapeType := .csi }, "")
+    else if c == ']' then
+      -- OSC sequence starting
+      return ({ s with wordBuffer := newBuffer, escapeType := .osc }, "")
+    else
+      -- Unknown escape, treat as ended
+      return ({ s with wordBuffer := newBuffer, escapeType := .none }, "")
 
-  if isEscapeStart c then
-    -- Starting an escape sequence
-    return ({ s with wordBuffer := s.wordBuffer.push c, inEscape := true }, "")
+  | .csi =>
+    let newBuffer := s.wordBuffer.push c
+    -- CSI ends with an alpha character
+    let newType := if c.isAlpha then .none else .csi
+    return ({ s with wordBuffer := newBuffer, escapeType := newType }, "")
+
+  | .osc =>
+    let newBuffer := s.wordBuffer.push c
+    if c == '\x1b' then
+      -- Might be start of ST (\x1b\)
+      return ({ s with wordBuffer := newBuffer, escapeType := .oscSawEsc }, "")
+    else if c == '\x07' then
+      -- BEL also terminates OSC
+      return ({ s with wordBuffer := newBuffer, escapeType := .none }, "")
+    else
+      return ({ s with wordBuffer := newBuffer, escapeType := .osc }, "")
+
+  | .oscSawEsc =>
+    let newBuffer := s.wordBuffer.push c
+    if c == '\\' then
+      -- ST complete, OSC ended
+      return ({ s with wordBuffer := newBuffer, escapeType := .none }, "")
+    else
+      -- Not ST, continue in OSC (the ESC might start a nested sequence but keep it simple)
+      return ({ s with wordBuffer := newBuffer, escapeType := .osc }, "")
+
+  | .none =>
+    -- Check for escape start
+    if c == '\x1b' then
+      return ({ s with wordBuffer := s.wordBuffer.push c, escapeType := .sawEsc }, "")
 
   -- Handle whitespace - time to emit the buffered word
   if c == ' ' || c == '\t' then

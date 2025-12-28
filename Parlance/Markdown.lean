@@ -9,6 +9,7 @@
   - *italic* and _italic_ → italic text
   - `code` → colored inline code
   - # Header through ###### → styled headers
+  - [text](url) → clickable underlined blue link (OSC 8 hyperlinks)
 -/
 
 import Parlance.Style
@@ -29,12 +30,16 @@ inductive Mode where
   | inCode           -- Inside `..., collecting code content
   | sawHash (count : Nat) -- Saw # at line start, counting
   | inHeader (level : Nat) -- Inside header, collecting content
+  | inLinkText       -- Inside [..., collecting link text
+  | sawLinkClose     -- Saw ], expecting (
+  | inLinkUrl        -- Inside ](..., collecting URL
   deriving Repr, BEq, Inhabited
 
 /-- Parser state for streaming markdown -/
 structure State where
   mode : Mode := .normal
   buffer : String := ""      -- Content being accumulated for current token
+  linkText : String := ""    -- Link text saved while parsing URL
   atLineStart : Bool := true -- Are we at the start of a line?
   deriving Repr, Inhabited
 
@@ -49,6 +54,7 @@ def boldStyle : Style := Style.bold
 def italicStyle : Style := Style.italic
 def boldItalicStyle : Style := Style.bold.withItalic
 def codeStyle : Style := { fg := .ansi .cyan }
+def linkStyle : Style := { fg := .ansi .blue, modifier := Modifier.mkUnderline }
 
 def headerStyle (level : Nat) : Style :=
   match level with
@@ -77,6 +83,8 @@ def step (s : State) (c : Char) : State × String := Id.run do
       ({ s with mode := .inCode, buffer := "", atLineStart := newLineStart }, "")
     else if c == '#' && s.atLineStart then
       ({ s with mode := .sawHash 1, atLineStart := false }, "")
+    else if c == '[' then
+      ({ s with mode := .inLinkText, buffer := "", atLineStart := newLineStart }, "")
     else
       ({ s with atLineStart := newLineStart }, c.toString)
 
@@ -169,6 +177,39 @@ def step (s : State) (c : Char) : State × String := Id.run do
     else
       ({ s with buffer := s.buffer.push c, atLineStart := false }, "")
 
+  | .inLinkText =>
+    if c == ']' then
+      -- End of link text, save it and look for (
+      ({ s with mode := .sawLinkClose, linkText := s.buffer, buffer := "", atLineStart := newLineStart }, "")
+    else if c == '\n' then
+      -- Newline in link text - not a valid link, emit literally
+      ({ s with mode := .normal, buffer := "", atLineStart := true }, "[" ++ s.buffer ++ "\n")
+    else
+      ({ s with buffer := s.buffer.push c, atLineStart := newLineStart }, "")
+
+  | .sawLinkClose =>
+    if c == '(' then
+      -- Start of URL
+      ({ s with mode := .inLinkUrl, buffer := "", atLineStart := newLineStart }, "")
+    else
+      -- Not a link, emit the bracketed text literally
+      let output := "[" ++ s.linkText ++ "]" ++ c.toString
+      ({ s with mode := .normal, linkText := "", atLineStart := newLineStart }, output)
+
+  | .inLinkUrl =>
+    if c == ')' then
+      -- End of link - render as clickable OSC 8 hyperlink with styled text
+      -- Format: \x1b]8;;URL\x07TEXT\x1b]8;;\x07 (using BEL as String Terminator)
+      let styledText := styled s.linkText linkStyle
+      let output := s!"\x1b]8;;{s.buffer}\x07{styledText}\x1b]8;;\x07"
+      ({ s with mode := .normal, buffer := "", linkText := "", atLineStart := newLineStart }, output)
+    else if c == '\n' then
+      -- Newline in URL - not valid, emit literally
+      ({ s with mode := .normal, buffer := "", linkText := "", atLineStart := true },
+        "[" ++ s.linkText ++ "](" ++ s.buffer ++ "\n")
+    else
+      ({ s with buffer := s.buffer.push c, atLineStart := newLineStart }, "")
+
 /-- Process a chunk of text, returning new state and output -/
 def feed (s : State) (chunk : String) : State × String := Id.run do
   let mut state := s
@@ -194,6 +235,9 @@ def finish (s : State) : String :=
   | .inHeader level =>
     -- Emit header even without trailing newline - only style the content
     styled s.buffer (headerStyle level)
+  | .inLinkText => "[" ++ s.buffer  -- Unclosed link text
+  | .sawLinkClose => "[" ++ s.linkText ++ "]"  -- Link text but no URL
+  | .inLinkUrl => "[" ++ s.linkText ++ "](" ++ s.buffer  -- Unclosed URL
 
 /-- Convenience: render a complete markdown string -/
 def render (input : String) : String :=
