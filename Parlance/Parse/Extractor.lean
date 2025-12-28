@@ -26,7 +26,19 @@ instance : FromArg Nat where
   argType := .nat
 
 instance : FromArg Float where
-  parse s := s.toNat?.map Float.ofNat
+  parse s :=
+    -- Handle decimal numbers like "0.7" or "1.5"
+    match s.splitOn "." with
+    | [intPart] => intPart.toNat?.map Float.ofNat
+    | [intPart, fracPart] =>
+      let intVal := intPart.toNat?.getD 0
+      let fracVal := fracPart.toNat?.getD 0
+      let fracDigits := fracPart.length
+      if fracDigits == 0 then some (Float.ofNat intVal)
+      else
+        let divisor := Float.pow 10.0 (Float.ofNat fracDigits)
+        some (Float.ofNat intVal + Float.ofNat fracVal / divisor)
+    | _ => none
   argType := .float
 
 instance : FromArg Bool where
@@ -91,6 +103,14 @@ def getNat (r : ParseResult) (name : String) : Option Nat :=
 /-- Get a Nat value with default -/
 def getNatD (r : ParseResult) (name : String) (default : Nat) : Nat :=
   r.getNat name |>.getD default
+
+/-- Get a Float value -/
+def getFloat (r : ParseResult) (name : String) : Option Float :=
+  r.get name
+
+/-- Get a Float value with default -/
+def getFloatD (r : ParseResult) (name : String) (default : Float) : Float :=
+  r.getFloat name |>.getD default
 
 end ParseResult
 
