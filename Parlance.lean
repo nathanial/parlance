@@ -14,3 +14,5 @@ import Parlance.Command
 import Parlance.Parse
 import Parlance.Output
 import Parlance.Completion
+import Parlance.Markdown
+import Parlance.Wrap

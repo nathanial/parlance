@@ -505,6 +505,66 @@ test "KeyCode toChar on non-char" := do
 
 end Tests.ReplInput
 
+-- Markdown Tests
+namespace Tests.Markdown
+
+open Parlance.Markdown
+open Staple (String.containsSubstr)
+
+testSuite "Markdown"
+
+test "plain text unchanged" :=
+  render "hello world" ≡ "hello world"
+
+test "bold renders with ANSI" := do
+  let result := render "**hello**"
+  shouldSatisfy (result.containsSubstr "\x1b[1m") "should contain bold code"
+  shouldSatisfy (result.containsSubstr "hello") "should contain text"
+
+test "italic star renders with ANSI" := do
+  let result := render "*hello*"
+  shouldSatisfy (result.containsSubstr "\x1b[3m") "should contain italic code"
+  shouldSatisfy (result.containsSubstr "hello") "should contain text"
+
+test "italic underscore renders with ANSI" := do
+  let result := render "_hello_"
+  shouldSatisfy (result.containsSubstr "\x1b[3m") "should contain italic code"
+  shouldSatisfy (result.containsSubstr "hello") "should contain text"
+
+test "inline code renders with ANSI" := do
+  let result := render "`code`"
+  shouldSatisfy (result.containsSubstr "code") "should contain text"
+  -- Code uses cyan color
+  shouldSatisfy (result.containsSubstr "\x1b[") "should contain ANSI escape"
+
+test "header renders with ANSI" := do
+  let result := render "# Header\n"
+  shouldSatisfy (result.containsSubstr "Header") "should contain text"
+  -- Headers use color + bold, check for ANSI escape sequence
+  shouldSatisfy (result.containsSubstr "\x1b[") "should contain ANSI escape"
+
+test "streaming handles split bold" := do
+  let (s1, o1) := feed State.new "**hel"
+  let (s2, o2) := feed s1 "lo**"
+  let o3 := finish s2
+  let result := o1 ++ o2 ++ o3
+  shouldSatisfy (result.containsSubstr "hello") "should contain full text"
+
+test "unclosed bold emits literally" := do
+  let result := render "**unclosed"
+  result ≡ "**unclosed"
+
+test "mixed content" := do
+  let result := render "This is **bold** and *italic* text."
+  shouldSatisfy (result.containsSubstr "This is ") "should have plain text"
+  shouldSatisfy (result.containsSubstr "bold") "should have bold text"
+  shouldSatisfy (result.containsSubstr "italic") "should have italic text"
+  shouldSatisfy (result.containsSubstr " text.") "should have trailing text"
+
+#generate_tests
+
+end Tests.Markdown
+
 -- Main test runner
 def main : IO UInt32 := do
   IO.println "Parlance CLI Library Tests"
