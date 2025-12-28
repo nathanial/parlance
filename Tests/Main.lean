@@ -4,6 +4,7 @@
 
 import Crucible
 import Parlance
+import Parlance.Repl
 import Staple
 
 open Crucible
@@ -346,6 +347,163 @@ test "handleCompletionRequest returns none for invalid shell" := do
 #generate_tests
 
 end Tests.Completion
+
+-- REPL LineBuffer Tests
+namespace Tests.LineBuffer
+
+open Parlance.Repl
+
+testSuite "LineBuffer"
+
+test "empty buffer" := do
+  let lb := LineBuffer.empty
+  lb.content ≡ ""
+  lb.cursor ≡ 0
+  shouldSatisfy lb.isEmpty "empty buffer should be empty"
+
+test "ofString creates buffer with cursor at end" := do
+  let lb := LineBuffer.ofString "hello"
+  lb.content ≡ "hello"
+  lb.cursor ≡ 5
+
+test "insertChar at end" := do
+  let lb := LineBuffer.ofString "hel"
+  let lb' := lb.insertChar 'l'
+  lb'.content ≡ "hell"
+  lb'.cursor ≡ 4
+
+test "insertChar in middle" := do
+  let lb : LineBuffer := { content := "hllo", cursor := 1 }
+  let lb' := lb.insertChar 'e'
+  lb'.content ≡ "hello"
+  lb'.cursor ≡ 2
+
+test "deleteBackward at end" := do
+  let lb := LineBuffer.ofString "hello"
+  let lb' := lb.deleteBackward
+  lb'.content ≡ "hell"
+  lb'.cursor ≡ 4
+
+test "deleteBackward at start does nothing" := do
+  let lb : LineBuffer := { content := "hello", cursor := 0 }
+  let lb' := lb.deleteBackward
+  lb'.content ≡ "hello"
+  lb'.cursor ≡ 0
+
+test "deleteForward in middle" := do
+  let lb : LineBuffer := { content := "hello", cursor := 2 }
+  let lb' := lb.deleteForward
+  lb'.content ≡ "helo"
+  lb'.cursor ≡ 2
+
+test "deleteForward at end does nothing" := do
+  let lb := LineBuffer.ofString "hello"
+  let lb' := lb.deleteForward
+  lb'.content ≡ "hello"
+  lb'.cursor ≡ 5
+
+test "moveCursorLeft" := do
+  let lb := LineBuffer.ofString "hello"
+  let lb' := lb.moveCursorLeft
+  lb'.cursor ≡ 4
+
+test "moveCursorLeft at start does nothing" := do
+  let lb : LineBuffer := { content := "hello", cursor := 0 }
+  let lb' := lb.moveCursorLeft
+  lb'.cursor ≡ 0
+
+test "moveCursorRight" := do
+  let lb : LineBuffer := { content := "hello", cursor := 2 }
+  let lb' := lb.moveCursorRight
+  lb'.cursor ≡ 3
+
+test "moveCursorRight at end does nothing" := do
+  let lb := LineBuffer.ofString "hello"
+  let lb' := lb.moveCursorRight
+  lb'.cursor ≡ 5
+
+test "moveCursorStart" := do
+  let lb := LineBuffer.ofString "hello"
+  let lb' := lb.moveCursorStart
+  lb'.cursor ≡ 0
+
+test "moveCursorEnd" := do
+  let lb : LineBuffer := { content := "hello", cursor := 2 }
+  let lb' := lb.moveCursorEnd
+  lb'.cursor ≡ 5
+
+test "deleteToEnd" := do
+  let lb : LineBuffer := { content := "hello world", cursor := 5 }
+  let lb' := lb.deleteToEnd
+  lb'.content ≡ "hello"
+  lb'.cursor ≡ 5
+
+test "deleteToStart" := do
+  let lb : LineBuffer := { content := "hello world", cursor := 6 }
+  let lb' := lb.deleteToStart
+  lb'.content ≡ "world"
+  lb'.cursor ≡ 0
+
+test "deleteWord simple" := do
+  let lb : LineBuffer := { content := "hello world", cursor := 11 }
+  let lb' := lb.deleteWord
+  lb'.content ≡ "hello "
+  lb'.cursor ≡ 6
+
+test "beforeCursor and afterCursor" := do
+  let lb : LineBuffer := { content := "hello world", cursor := 5 }
+  lb.beforeCursor ≡ "hello"
+  lb.afterCursor ≡ " world"
+
+test "clear resets buffer" := do
+  let lb := LineBuffer.ofString "hello"
+  let lb' := lb.clear
+  lb'.content ≡ ""
+  lb'.cursor ≡ 0
+
+#generate_tests
+
+end Tests.LineBuffer
+
+-- REPL Input Tests
+namespace Tests.ReplInput
+
+open Parlance.Repl
+
+testSuite "ReplInput"
+
+test "KeyEvent constructors" := do
+  let e := KeyEvent.char 'a'
+  e.code ≡ KeyCode.char 'a'
+  e.modifiers.ctrl ≡ false
+
+test "KeyEvent withCtrl" := do
+  let e := KeyEvent.char 'c' |>.withCtrl
+  e.modifiers.ctrl ≡ true
+
+test "KeyEvent isCtrlC" := do
+  let e := KeyEvent.char 'c' |>.withCtrl
+  shouldSatisfy e.isCtrlC "Ctrl+C should be detected"
+
+test "KeyEvent isCtrlD" := do
+  let e := KeyEvent.char 'd' |>.withCtrl
+  shouldSatisfy e.isCtrlD "Ctrl+D should be detected"
+
+test "KeyEvent isCtrlC negative" := do
+  let e := KeyEvent.char 'c'
+  shouldSatisfy (!e.isCtrlC) "c without Ctrl should not be Ctrl+C"
+
+test "KeyCode toChar" := do
+  let code := KeyCode.char 'x'
+  code.toChar ≡ some 'x'
+
+test "KeyCode toChar on non-char" := do
+  let code := KeyCode.enter
+  shouldBeNone code.toChar
+
+#generate_tests
+
+end Tests.ReplInput
 
 -- Main test runner
 def main : IO UInt32 := do
