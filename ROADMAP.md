@@ -636,6 +636,9 @@ structure Options where
 
 ## Summary
 
+### Completed
+1. ✓ Shell completion generation (Bash, Zsh, Fish)
+
 ### Quick Wins (Small Effort, High Impact)
 1. Fix Float parsing in FromArg
 2. Environment variable support
@@ -644,14 +647,15 @@ structure Options where
 5. Colored help output
 
 ### Medium-Term Improvements
-1. Shell completion generation
-2. Multi-value flag support
-3. Short flag value parsing (-ovalue)
-4. Flag groups and mutual exclusion
-5. Comprehensive test coverage
+1. Multi-value flag support
+2. Short flag value parsing (-ovalue)
+3. Flag groups and mutual exclusion
+4. Comprehensive test coverage
+5. Advanced completion hints (directories, custom commands)
 
 ### Long-Term Features
 1. Interactive prompts
 2. Configuration file support
 3. Type-safe argument extraction with compile-time checking
 4. Derived commands from types
+5. PowerShell completion support
