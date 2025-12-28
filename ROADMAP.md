@@ -83,6 +83,77 @@ myapp --generate-completion fish > ~/.config/fish/completions/myapp.fish
 
 ---
 
+### [Priority: High] REPL Support
+
+**Description:** Add support for building REPL-style interactive applications (like `irb`, `ipython`, `psql`, `node`).
+
+**Rationale:** There's a gap between batch CLIs (parse args → run → exit) and full TUI applications (raw mode screen takeover). Many tools need the middle ground: a prompt-based read-eval-print loop with line editing, history, and completion—but without full screen control. Examples include database clients (`psql`, `sqlite3`, `redis-cli`), language REPLs (`irb`, `ipython`, `ghci`, `node`), and interactive shells.
+
+Parlance is the natural home for this since it already has:
+- Command/argument definitions (reusable for REPL commands)
+- Styled output infrastructure
+- Completion definitions (can inform in-REPL tab completion)
+
+| Level | Example | Description |
+|-------|---------|-------------|
+| Batch CLI | `grep`, `curl` | Parse args → run → exit |
+| **REPL** | `irb`, `psql` | **Prompt → readline → eval → loop** |
+| Full TUI | `vim`, `htop` | Raw mode takeover, widgets, full screen |
+
+**Key Features:**
+- **Line editing** - cursor movement (arrows, home/end), insert/delete, kill ring (ctrl+k/y)
+- **History** - up/down navigation, ctrl+r incremental search, file persistence
+- **Tab completion** - context-aware, uses existing Parlance completion infrastructure
+- **Custom prompt** - can display state (current directory, connection info, etc.)
+- **Normal stdout** - output scrolls naturally, coexists with scrollback
+
+**Affected Files:**
+- New file: `Parlance/Repl/Readline.lean` - line editing, cursor movement, key handling
+- New file: `Parlance/Repl/History.lean` - in-memory history, file persistence, search
+- New file: `Parlance/Repl/Completion.lean` - tab completion integration
+- New file: `Parlance/Repl/Loop.lean` - REPL driver, eval dispatch
+- New file: `Parlance/Repl/Prompt.lean` - customizable prompt rendering
+- New file: `ffi/readline.c` - raw terminal input (partial raw mode for keypresses)
+
+**Proposed API:**
+```lean
+import Parlance
+
+open Parlance.Repl
+
+def main : IO Unit := do
+  let repl := Repl.create do
+    Repl.prompt "> "
+    Repl.historyFile ".myapp_history"
+    Repl.maxHistory 1000
+
+    -- Reuse Parlance command definitions for completion
+    Repl.commands myCommandSpec
+
+    -- Or custom completion
+    Repl.completer fun line pos => do
+      -- return completion candidates
+      pure ["help", "quit", "load", "save"]
+
+  repl.run fun input => do
+    -- Eval the input, return whether to continue
+    match input.trim with
+    | "quit" => pure false
+    | "help" => IO.println "Available commands: ..."; pure true
+    | cmd =>
+      -- Process command
+      IO.println s!"You entered: {cmd}"
+      pure true
+```
+
+**Estimated Effort:** Large
+
+**Dependencies:**
+- Raw terminal mode FFI (simpler than terminus - only needs keypress reading, not full screen control)
+- Could potentially share terminal FFI code with terminus
+
+---
+
 ### [Priority: Medium] Interactive Prompts
 
 **Description:** Add support for interactive prompts when required values are missing (confirmation, text input, selection).
@@ -97,7 +168,7 @@ myapp --generate-completion fish > ~/.config/fish/completions/myapp.fish
 
 **Estimated Effort:** Medium
 
-**Dependencies:** May need raw terminal mode (FFI similar to terminus)
+**Dependencies:** REPL Support (can reuse readline infrastructure)
 
 ---
 
@@ -652,9 +723,10 @@ structure Options where
 3. Flag groups and mutual exclusion
 4. Comprehensive test coverage
 5. Advanced completion hints (directories, custom commands)
+6. Interactive prompts (one-shot: confirm, text input, select)
 
 ### Long-Term Features
-1. Interactive prompts
+1. **REPL support** (readline, history, in-REPL completion)
 2. Configuration file support
 3. Type-safe argument extraction with compile-time checking
 4. Derived commands from types
