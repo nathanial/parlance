@@ -6,7 +6,7 @@ package parlance where
   precompileModules := true
 
 require crucible from git "https://github.com/nathanial/crucible" @ "v0.0.1"
-require staple from git "https://github.com/nathanial/staple" @ "v0.0.1"
+require staple from git "https://github.com/nathanial/staple" @ "v0.0.2"
 require chronicle from git "https://github.com/nathanial/chronicle" @ "v0.0.1"
 
 @[default_target]
