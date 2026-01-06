@@ -36,11 +36,13 @@ private def formatFlag (f : Flag) (config : HelpConfig) : String :=
     then String.mk (List.replicate (config.descColumn - pref.length) ' ')
     else ""
   let paddedPref := pref ++ padding
+  -- Add repeatable indicator
+  let repeatStr := if f.repeatable then " [can repeat]" else ""
   -- Add environment variable info to description
   let envStr := match f.envVar with
     | some env => s!" [env: {env}]"
     | none => ""
-  let fullDesc := f.description ++ envStr
+  let fullDesc := f.description ++ repeatStr ++ envStr
   if fullDesc.isEmpty then
     s!"  {pref}"
   else if pref.length >= config.descColumn then

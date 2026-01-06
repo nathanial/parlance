@@ -50,6 +50,11 @@ def setValue (name : String) (value : String) : ParserM Unit := do
   let state ← get
   set { state with values := state.values.setValue name value }
 
+/-- Add a value for a repeatable flag (appends without replacing) -/
+def addValue (name : String) (value : String) : ParserM Unit := do
+  let state ← get
+  set { state with values := state.values.addValue name value }
+
 /-- Record a boolean flag -/
 def setBool (name : String) : ParserM Unit := do
   let state ← get
@@ -89,7 +94,10 @@ def parseLongFlag (name : String) : ParserM Unit := do
       setBool flag.long
     else
       let value ← consumeFlagValue flag.long
-      setValue flag.long value
+      if flag.repeatable then
+        addValue flag.long value
+      else
+        setValue flag.long value
   | none => throw (.unknownFlag name)
 
 /-- Parse a long flag with attached value -/
@@ -105,7 +113,10 @@ def parseLongFlagValue (name : String) (value : String) : ParserM Unit := do
         setBool flag.long
       -- Otherwise, don't set (treat as false)
     else
-      setValue flag.long value
+      if flag.repeatable then
+        addValue flag.long value
+      else
+        setValue flag.long value
   | none => throw (.unknownFlag name)
 
 /-- Parse a short flag -/
@@ -125,7 +136,10 @@ def parseShortFlag (c : Char) : ParserM Unit := do
       setBool flag.long
     else
       let value ← consumeFlagValue flag.long
-      setValue flag.long value
+      if flag.repeatable then
+        addValue flag.long value
+      else
+        setValue flag.long value
   | none => throw (.unknownFlag (String.singleton c))
 
 /-- Parse a positional argument -/
@@ -172,7 +186,10 @@ def parseToken (token : Token) : ParserM Unit :=
         setBool flag.long
         addRemaining value
       else
-        setValue flag.long value
+        if flag.repeatable then
+          addValue flag.long value
+        else
+          setValue flag.long value
     | none => throw (.unknownFlag (String.singleton c))
   | .positional value => parsePositional value
   | .endOfFlags => pure ()
@@ -193,8 +210,14 @@ def applyDefaults : ParserM Unit := do
   -- Apply flag defaults
   for flag in cmd.flags do
     if let some dflt := flag.defaultValue then
-      if state.values.getValue flag.long |>.isNone then
-        if !state.values.hasBool flag.long then
+      -- For repeatable flags, check hasValue; for others, check getValue
+      let hasExisting := if flag.repeatable
+        then state.values.hasValue flag.long
+        else state.values.getValue flag.long |>.isSome || state.values.hasBool flag.long
+      if !hasExisting then
+        if flag.repeatable then
+          addValue flag.long dflt
+        else
           setValue flag.long dflt
 
   -- Apply arg defaults
@@ -210,20 +233,29 @@ def applyDefaultsWithEnv (getEnv : String → Option String) : ParserM Unit := d
 
   -- Apply environment variables and flag defaults
   for flag in cmd.flags do
-    if state.values.getValue flag.long |>.isNone then
-      if !state.values.hasBool flag.long then
-        -- First try environment variable
-        if let some envName := flag.envVar then
-          if let some envValue := getEnv envName then
-            -- For boolean flags, treat non-empty as true
-            if flag.isBoolean then
-              if envValue.toLower == "true" || envValue == "1" || envValue.toLower == "yes" then
-                setBool flag.long
+    -- For repeatable flags, check hasValue; for others, check getValue
+    let hasExisting := if flag.repeatable
+      then state.values.hasValue flag.long
+      else state.values.getValue flag.long |>.isSome || state.values.hasBool flag.long
+    if !hasExisting then
+      -- First try environment variable
+      if let some envName := flag.envVar then
+        if let some envValue := getEnv envName then
+          -- For boolean flags, treat non-empty as true
+          if flag.isBoolean then
+            if envValue.toLower == "true" || envValue == "1" || envValue.toLower == "yes" then
+              setBool flag.long
+          else
+            if flag.repeatable then
+              addValue flag.long envValue
             else
               setValue flag.long envValue
-            continue
-        -- Then try default value
-        if let some dflt := flag.defaultValue then
+          continue
+      -- Then try default value
+      if let some dflt := flag.defaultValue then
+        if flag.repeatable then
+          addValue flag.long dflt
+        else
           setValue flag.long dflt
 
   -- Apply arg defaults (args don't support env vars)
@@ -240,9 +272,12 @@ def validateRequired : ParserM Unit := do
   -- Check required flags
   for flag in cmd.flags do
     if flag.required then
-      if state.values.getValue flag.long |>.isNone then
-        if !state.values.hasBool flag.long then
-          throw (.missingRequired s!"--{flag.long}")
+      -- For repeatable flags, check hasValue; for others, check getValue
+      let hasValue := if flag.repeatable
+        then state.values.hasValue flag.long
+        else state.values.getValue flag.long |>.isSome || state.values.hasBool flag.long
+      if !hasValue then
+        throw (.missingRequired s!"--{flag.long}")
 
   -- Check required args
   for arg in cmd.args do

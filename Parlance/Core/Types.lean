@@ -46,6 +46,8 @@ structure Flag where
   required : Bool := false
   /-- Environment variable to use as fallback (e.g., "TOKEN" for $TOKEN) -/
   envVar : Option String := none
+  /-- Whether this flag can be specified multiple times -/
+  repeatable : Bool := false
   deriving Repr, BEq, Inhabited
 
 namespace Flag
@@ -135,6 +137,18 @@ def getValue (pv : ParsedValues) (name : String) : Option String :=
 
 def hasBool (pv : ParsedValues) (name : String) : Bool :=
   pv.boolFlags.contains name
+
+/-- Add a value for a flag (appends without filtering, for repeatable flags) -/
+def addValue (pv : ParsedValues) (name : String) (value : String) : ParsedValues :=
+  { pv with values := pv.values ++ [(name, value)] }
+
+/-- Get all values for a name (for repeatable flags) -/
+def getValues (pv : ParsedValues) (name : String) : List String :=
+  pv.values.filter (·.1 == name) |>.map (·.2)
+
+/-- Check if any values exist for a name -/
+def hasValue (pv : ParsedValues) (name : String) : Bool :=
+  pv.values.any (·.1 == name)
 
 end ParsedValues
 

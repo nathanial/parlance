@@ -292,6 +292,123 @@ test "help text includes env var info" := do
 
 end Tests.EnvVar
 
+-- Repeatable Flag Tests
+namespace Tests.RepeatableFlags
+
+open Staple (String.containsSubstr)
+
+testSuite "RepeatableFlags"
+
+test "repeatable flag collects multiple values" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "include" (short := some 'I') (description := "Include path")
+  match parse cmd ["-I", "path1", "-I", "path2", "--include", "path3"] with
+  | .ok result =>
+    let values := result.getStrings "include"
+    values ≡ ["path1", "path2", "path3"]
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "repeatable flag with long flag value syntax" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "define" (short := some 'D')
+  match parse cmd ["--define=FOO", "--define=BAR"] with
+  | .ok result =>
+    let values := result.getStrings "define"
+    values ≡ ["FOO", "BAR"]
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "non-repeatable flag replaces value" := do
+  let cmd := command "test" do
+    Cmd.flag "output" (short := some 'o')
+  match parse cmd ["-o", "first", "-o", "second"] with
+  | .ok result =>
+    result.getString "output" ≡ some "second"
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "repeatable flag getInts" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "port" (argType := .int)
+  match parse cmd ["--port", "80", "--port", "443", "--port", "8080"] with
+  | .ok result =>
+    let ports := result.getInts "port"
+    ports ≡ [80, 443, 8080]
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "repeatable flag empty when not provided" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "include"
+  match parse cmd [] with
+  | .ok result =>
+    let values := result.getStrings "include"
+    values ≡ []
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "repeatable flag with default value" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "include" (defaultValue := some "default")
+  match parse cmd [] with
+  | .ok result =>
+    let values := result.getStrings "include"
+    values ≡ ["default"]
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "repeatable flag overrides default when values provided" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "include" (defaultValue := some "default")
+  match parse cmd ["--include", "custom"] with
+  | .ok result =>
+    let values := result.getStrings "include"
+    values ≡ ["custom"]
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "help text shows repeatable indicator" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "include" (short := some 'I') (description := "Include path")
+  let help := cmd.helpText
+  shouldSatisfy (help.containsSubstr "[can repeat]") "help should indicate repeatable"
+
+test "repeatable flag getAll with paths" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "path" (argType := .path)
+  match parse cmd ["--path", "/usr/lib", "--path", "/usr/local/lib"] with
+  | .ok result =>
+    let paths := result.getPaths "path"
+    paths.length ≡ 2
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "mixed flags - repeatable and non-repeatable" := do
+  let cmd := command "test" do
+    Cmd.flag "output"
+    Cmd.repeatableFlag "include"
+  match parse cmd ["--output", "out.txt", "--include", "a", "--include", "b"] with
+  | .ok result =>
+    result.getString "output" ≡ some "out.txt"
+    result.getStrings "include" ≡ ["a", "b"]
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "required repeatable flag validates" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "include" (required := true)
+  match parse cmd [] with
+  | .ok _ => throw (IO.userError "Expected validation error")
+  | .error e =>
+    match e with
+    | .missingRequired _ => pure ()
+    | _ => throw (IO.userError s!"Expected missingRequired, got {e}")
+
+test "required repeatable flag satisfied with one value" := do
+  let cmd := command "test" do
+    Cmd.repeatableFlag "include" (required := true)
+  match parse cmd ["--include", "path1"] with
+  | .ok result =>
+    let values := result.getStrings "include"
+    values ≡ ["path1"]
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+#generate_tests
+
+end Tests.RepeatableFlags
+
 -- Table Tests
 namespace Tests.Tables
 

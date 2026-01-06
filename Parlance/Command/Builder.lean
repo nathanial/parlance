@@ -72,6 +72,26 @@ def flag (long : String) (short : Option Char := none)
     }
   }
 
+/-- Add a repeatable flag (can be specified multiple times to collect values) -/
+def repeatableFlag (long : String) (short : Option Char := none)
+    (argType : ArgType := .string)
+    (description : String := "")
+    (defaultValue : Option String := none)
+    (required : Bool := false)
+    (envVar : Option String := none) : CommandM Unit :=
+  modify fun s => { s with
+    flags := s.flags.push {
+      long := long
+      short := short
+      argType := some argType
+      description := description
+      defaultValue := defaultValue
+      required := required
+      envVar := envVar
+      repeatable := true
+    }
+  }
+
 /-- Add a positional argument -/
 def arg (name : String) (argType : ArgType := .string)
     (description : String := "")
@@ -133,6 +153,14 @@ def flag (long : String) (short : Option Char := none)
     (required : Bool := false)
     (envVar : Option String := none) : CommandM Unit :=
   CommandM.flag long short argType description defaultValue required envVar
+
+def repeatableFlag (long : String) (short : Option Char := none)
+    (argType : ArgType := .string)
+    (description : String := "")
+    (defaultValue : Option String := none)
+    (required : Bool := false)
+    (envVar : Option String := none) : CommandM Unit :=
+  CommandM.repeatableFlag long short argType description defaultValue required envVar
 
 def arg (name : String) (argType : ArgType := .string)
     (description : String := "")

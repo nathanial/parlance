@@ -72,13 +72,37 @@ def getBool (r : ParseResult) (name : String) : Bool :=
   if r.values.hasBool name then true
   else (r.values.getValue name >>= FromArg.parse (α := Bool)) |>.getD false
 
+/-- Get all raw string values for a repeatable flag -/
+def getValues (r : ParseResult) (name : String) : List String :=
+  r.values.getValues name
+
+/-- Get all typed values for a repeatable flag -/
+def getAll [FromArg α] (r : ParseResult) (name : String) : List α :=
+  r.values.getValues name |>.filterMap FromArg.parse
+
 /-- Get a list of values (for flags that can be repeated) -/
 def getList [FromArg α] (r : ParseResult) (name : String) : List α :=
-  -- For now, just return single value as list
-  -- A more complete implementation would track multiple values
-  match r.get name with
-  | some v => [v]
-  | none => []
+  r.getAll name
+
+/-- Get all string values for a repeatable flag -/
+def getStrings (r : ParseResult) (name : String) : List String :=
+  r.getValues name
+
+/-- Get all integer values for a repeatable flag -/
+def getInts (r : ParseResult) (name : String) : List Int :=
+  r.getAll name
+
+/-- Get all natural number values for a repeatable flag -/
+def getNats (r : ParseResult) (name : String) : List Nat :=
+  r.getAll name
+
+/-- Get all float values for a repeatable flag -/
+def getFloats (r : ParseResult) (name : String) : List Float :=
+  r.getAll name
+
+/-- Get all path values for a repeatable flag -/
+def getPaths (r : ParseResult) (name : String) : List System.FilePath :=
+  r.getAll name
 
 /-- Get a FilePath value -/
 def getPath (r : ParseResult) (name : String) : Option System.FilePath :=
