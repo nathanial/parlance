@@ -44,6 +44,8 @@ structure Flag where
   defaultValue : Option String := none
   /-- Whether this flag is required -/
   required : Bool := false
+  /-- Environment variable to use as fallback (e.g., "TOKEN" for $TOKEN) -/
+  envVar : Option String := none
   deriving Repr, BEq, Inhabited
 
 namespace Flag

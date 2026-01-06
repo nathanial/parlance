@@ -187,6 +187,111 @@ test "Command.usage with flags" := do
 
 end Tests.HelpGeneration
 
+-- Environment Variable Tests
+namespace Tests.EnvVar
+
+open Staple (String.containsSubstr)
+
+testSuite "EnvVar"
+
+test "Flag stores envVar field" := do
+  let cmd := command "test" do
+    Cmd.flag "token" (envVar := some "API_TOKEN")
+  match cmd.flags[0]? with
+  | some flag => flag.envVar ≡ some "API_TOKEN"
+  | none => throw (IO.userError "Expected flag")
+
+test "parseWithEnv uses env var value" := do
+  let cmd := command "test" do
+    Cmd.flag "token" (envVar := some "API_TOKEN")
+  let getEnv := fun name => if name == "API_TOKEN" then some "secret123" else none
+  match parseWithEnv cmd [] getEnv with
+  | .ok result =>
+    let val := result.getString "token"
+    if val != some "secret123" then
+      throw (IO.userError s!"Expected some \"secret123\", got {repr val}")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parseWithEnv prefers command-line over env var" := do
+  let cmd := command "test" do
+    Cmd.flag "token" (envVar := some "API_TOKEN")
+  let getEnv := fun name => if name == "API_TOKEN" then some "fromenv" else none
+  match parseWithEnv cmd ["--token=fromcli"] getEnv with
+  | .ok result =>
+    let val := result.getString "token"
+    if val != some "fromcli" then
+      throw (IO.userError s!"Expected some \"fromcli\", got {repr val}")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parseWithEnv env var overrides default" := do
+  let cmd := command "test" do
+    Cmd.flag "token" (defaultValue := some "default") (envVar := some "API_TOKEN")
+  let getEnv := fun name => if name == "API_TOKEN" then some "fromenv" else none
+  match parseWithEnv cmd [] getEnv with
+  | .ok result =>
+    let val := result.getString "token"
+    if val != some "fromenv" then
+      throw (IO.userError s!"Expected some \"fromenv\", got {repr val}")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parseWithEnv falls back to default when env not set" := do
+  let cmd := command "test" do
+    Cmd.flag "token" (defaultValue := some "default") (envVar := some "API_TOKEN")
+  let getEnv := fun _ => none
+  match parseWithEnv cmd [] getEnv with
+  | .ok result =>
+    let val := result.getString "token"
+    if val != some "default" then
+      throw (IO.userError s!"Expected some \"default\", got {repr val}")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parseWithEnv boolean flag from env true" := do
+  let cmd := command "test" do
+    Cmd.boolFlag "verbose" (envVar := some "VERBOSE")
+  let getEnv := fun name => if name == "VERBOSE" then some "true" else none
+  match parseWithEnv cmd [] getEnv with
+  | .ok result =>
+    if !result.hasFlag "verbose" then
+      throw (IO.userError "Expected verbose flag to be set")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parseWithEnv boolean flag from env 1" := do
+  let cmd := command "test" do
+    Cmd.boolFlag "verbose" (envVar := some "VERBOSE")
+  let getEnv := fun name => if name == "VERBOSE" then some "1" else none
+  match parseWithEnv cmd [] getEnv with
+  | .ok result =>
+    if !result.hasFlag "verbose" then
+      throw (IO.userError "Expected verbose flag to be set")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parseWithEnv boolean flag not set when env is false" := do
+  let cmd := command "test" do
+    Cmd.boolFlag "verbose" (envVar := some "VERBOSE")
+  let getEnv := fun name => if name == "VERBOSE" then some "false" else none
+  match parseWithEnv cmd [] getEnv with
+  | .ok result =>
+    if result.hasFlag "verbose" then
+      throw (IO.userError "Expected verbose flag to NOT be set")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "help text includes env var info" := do
+  let cmd := command "test" do
+    Cmd.flag "token" (description := "API token") (envVar := some "API_TOKEN")
+  let help := cmd.helpText
+  shouldSatisfy (help.containsSubstr "[env: API_TOKEN]") "help should contain env var info"
+
+#generate_tests
+
+end Tests.EnvVar
+
 -- Table Tests
 namespace Tests.Tables
 

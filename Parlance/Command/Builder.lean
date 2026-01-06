@@ -40,7 +40,8 @@ def description (d : String) : CommandM Unit :=
 
 /-- Add a boolean flag (no value required) -/
 def boolFlag (long : String) (short : Option Char := none)
-    (description : String := "") : CommandM Unit :=
+    (description : String := "")
+    (envVar : Option String := none) : CommandM Unit :=
   modify fun s => { s with
     flags := s.flags.push {
       long := long
@@ -48,6 +49,7 @@ def boolFlag (long : String) (short : Option Char := none)
       argType := none
       description := description
       required := false
+      envVar := envVar
     }
   }
 
@@ -56,7 +58,8 @@ def flag (long : String) (short : Option Char := none)
     (argType : ArgType := .string)
     (description : String := "")
     (defaultValue : Option String := none)
-    (required : Bool := false) : CommandM Unit :=
+    (required : Bool := false)
+    (envVar : Option String := none) : CommandM Unit :=
   modify fun s => { s with
     flags := s.flags.push {
       long := long
@@ -65,6 +68,7 @@ def flag (long : String) (short : Option Char := none)
       description := description
       defaultValue := defaultValue
       required := required
+      envVar := envVar
     }
   }
 
@@ -118,15 +122,17 @@ def version (v : String) : CommandM Unit := CommandM.version v
 def description (d : String) : CommandM Unit := CommandM.description d
 
 def boolFlag (long : String) (short : Option Char := none)
-    (description : String := "") : CommandM Unit :=
-  CommandM.boolFlag long short description
+    (description : String := "")
+    (envVar : Option String := none) : CommandM Unit :=
+  CommandM.boolFlag long short description envVar
 
 def flag (long : String) (short : Option Char := none)
     (argType : ArgType := .string)
     (description : String := "")
     (defaultValue : Option String := none)
-    (required : Bool := false) : CommandM Unit :=
-  CommandM.flag long short argType description defaultValue required
+    (required : Bool := false)
+    (envVar : Option String := none) : CommandM Unit :=
+  CommandM.flag long short argType description defaultValue required envVar
 
 def arg (name : String) (argType : ArgType := .string)
     (description : String := "")

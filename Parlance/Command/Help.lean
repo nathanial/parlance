@@ -36,12 +36,17 @@ private def formatFlag (f : Flag) (config : HelpConfig) : String :=
     then String.mk (List.replicate (config.descColumn - pref.length) ' ')
     else ""
   let paddedPref := pref ++ padding
-  if f.description.isEmpty then
+  -- Add environment variable info to description
+  let envStr := match f.envVar with
+    | some env => s!" [env: {env}]"
+    | none => ""
+  let fullDesc := f.description ++ envStr
+  if fullDesc.isEmpty then
     s!"  {pref}"
   else if pref.length >= config.descColumn then
-    s!"  {pref}\n{String.mk (List.replicate (config.descColumn + 2) ' ')}{f.description}"
+    s!"  {pref}\n{String.mk (List.replicate (config.descColumn + 2) ' ')}{fullDesc}"
   else
-    s!"  {paddedPref}{f.description}"
+    s!"  {paddedPref}{fullDesc}"
 
 /-- Format a positional argument for help display -/
 private def formatArg (a : Arg) (config : HelpConfig) : String :=

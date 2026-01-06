@@ -185,7 +185,7 @@ partial def parseAll : ParserM Unit := do
     parseAll
   | none => pure ()
 
-/-- Apply default values for missing flags/args -/
+/-- Apply default values for missing flags/args (pure version without env vars) -/
 def applyDefaults : ParserM Unit := do
   let state ← get
   let cmd := state.currentCommand
@@ -198,6 +198,35 @@ def applyDefaults : ParserM Unit := do
           setValue flag.long dflt
 
   -- Apply arg defaults
+  for arg in cmd.args do
+    if let some dflt := arg.defaultValue then
+      if state.values.getValue arg.name |>.isNone then
+        setValue arg.name dflt
+
+/-- Apply defaults with environment variable lookup -/
+def applyDefaultsWithEnv (getEnv : String → Option String) : ParserM Unit := do
+  let state ← get
+  let cmd := state.currentCommand
+
+  -- Apply environment variables and flag defaults
+  for flag in cmd.flags do
+    if state.values.getValue flag.long |>.isNone then
+      if !state.values.hasBool flag.long then
+        -- First try environment variable
+        if let some envName := flag.envVar then
+          if let some envValue := getEnv envName then
+            -- For boolean flags, treat non-empty as true
+            if flag.isBoolean then
+              if envValue.toLower == "true" || envValue == "1" || envValue.toLower == "yes" then
+                setBool flag.long
+            else
+              setValue flag.long envValue
+            continue
+        -- Then try default value
+        if let some dflt := flag.defaultValue then
+          setValue flag.long dflt
+
+  -- Apply arg defaults (args don't support env vars)
   for arg in cmd.args do
     if let some dflt := arg.defaultValue then
       if state.values.getValue arg.name |>.isNone then
@@ -253,8 +282,36 @@ end Parlance.Parse
 
 namespace Parlance
 
-/-- Top-level parse function -/
+/-- Top-level parse function (pure, without environment variable support) -/
 def parse (cmd : Command) (args : List String) : Except ParseError ParseResult :=
   Parse.parse cmd args
+
+/-- Parse with environment variable lookup (pass a custom getEnv function) -/
+def parseWithEnv (cmd : Command) (args : List String) (getEnv : String → Option String) : Except ParseError ParseResult := do
+  let tokens := Parse.tokenize args
+  let initialState : Parse.ParserState := {
+    tokens := tokens
+    currentCommand := cmd
+  }
+
+  let action := do
+    Parse.ParserM.parseAll
+    Parse.ParserM.applyDefaultsWithEnv getEnv
+    Parse.ParserM.validateRequired
+    Parse.ParserM.buildResult
+
+  let (result, _) := action.run initialState
+  result
+
+/-- Parse with system environment variables (IO version) -/
+def parseIO (cmd : Command) (args : List String) : IO (Except ParseError ParseResult) := do
+  -- Build a list of (envName, value) pairs for all defined env vars
+  let mut envPairs : List (String × String) := []
+  for flag in cmd.flags do
+    if let some envName := flag.envVar then
+      if let some value ← IO.getEnv envName then
+        envPairs := (envName, value) :: envPairs
+  let getEnv := fun name => envPairs.find? (·.1 == name) |>.map (·.2)
+  pure (parseWithEnv cmd args getEnv)
 
 end Parlance
