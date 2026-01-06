@@ -123,6 +123,21 @@ test "FromArg Bool true" :=
 test "FromArg Bool false" :=
   FromArg.parse (α := Bool) "false" ≡ some false
 
+test "FromArg Float decimal" :=
+  FromArg.parse (α := Float) "3.14" ≡ some 3.14
+
+test "FromArg Float negative" :=
+  FromArg.parse (α := Float) "-3.14" ≡ some (-3.14)
+
+test "FromArg Float scientific" :=
+  FromArg.parse (α := Float) "1e-5" ≡ some 0.00001
+
+test "FromArg Float integer" :=
+  FromArg.parse (α := Float) "42" ≡ some 42.0
+
+test "FromArg Float negative integer" :=
+  FromArg.parse (α := Float) "-42" ≡ some (-42.0)
+
 #generate_tests
 
 end Tests.Extractor

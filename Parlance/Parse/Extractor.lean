@@ -25,20 +25,51 @@ instance : FromArg Nat where
   parse s := s.toNat?
   argType := .nat
 
-instance : FromArg Float where
-  parse s :=
-    -- Handle decimal numbers like "0.7" or "1.5"
-    match s.splitOn "." with
-    | [intPart] => intPart.toNat?.map Float.ofNat
+private def parseFloatStr (s : String) : Option Float :=
+  if s.isEmpty then none
+  else
+    -- Handle optional sign
+    let (isNeg, rest) := if s.startsWith "-" then (true, s.drop 1)
+                         else if s.startsWith "+" then (false, s.drop 1)
+                         else (false, s)
+    -- Split on 'e' or 'E' for scientific notation
+    let (mantissaStr, expStr) := match rest.splitOn "e" with
+      | [m, e] => (m, some e)
+      | [m] => match rest.splitOn "E" with
+        | [m', e'] => (m', some e')
+        | _ => (m, none)
+      | _ => (rest, none)
+    -- Parse the mantissa (integer and optional decimal parts)
+    match mantissaStr.splitOn "." with
     | [intPart, fracPart] =>
-      let intVal := intPart.toNat?.getD 0
-      let fracVal := fracPart.toNat?.getD 0
-      let fracDigits := fracPart.length
-      if fracDigits == 0 then some (Float.ofNat intVal)
-      else
-        let divisor := Float.pow 10.0 (Float.ofNat fracDigits)
-        some (Float.ofNat intVal + Float.ofNat fracVal / divisor)
+      let intVal := if intPart.isEmpty then 0 else intPart.toNat?.getD 0
+      let (fracVal, fracDigits) := if fracPart.isEmpty then (0, 0)
+                                   else (fracPart.toNat?.getD 0, fracPart.length)
+      let baseVal := Float.ofNat intVal + Float.ofNat fracVal / Float.pow 10.0 (Float.ofNat fracDigits)
+      let signedVal := if isNeg then -baseVal else baseVal
+      applyExponent signedVal expStr
+    | [intPart] =>
+      match intPart.toNat? with
+      | some n =>
+        let signedVal := if isNeg then -(Float.ofNat n) else Float.ofNat n
+        applyExponent signedVal expStr
+      | none => none
     | _ => none
+where
+  applyExponent (val : Float) (expStr : Option String) : Option Float :=
+    match expStr with
+    | some e =>
+      let (expNeg, expRest) := if e.startsWith "-" then (true, e.drop 1)
+                               else if e.startsWith "+" then (false, e.drop 1)
+                               else (false, e)
+      match expRest.toNat? with
+      | some exp => some (if expNeg then val / Float.pow 10.0 (Float.ofNat exp)
+                          else val * Float.pow 10.0 (Float.ofNat exp))
+      | none => some val
+    | none => some val
+
+instance : FromArg Float where
+  parse := parseFloatStr
   argType := .float
 
 instance : FromArg Bool where
