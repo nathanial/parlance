@@ -20,6 +20,8 @@ structure HelpConfig where
   descColumn : Nat := 24
   /-- Use colors in output -/
   useColors : Bool := true
+  /-- Show full details for subcommands (args and flags) -/
+  showSubcommandDetails : Bool := true
   deriving Inhabited
 
 /-- Format a flag for help display -/
@@ -50,6 +52,26 @@ private def formatFlag (f : Flag) (config : HelpConfig) : String :=
   else
     s!"  {paddedPref}{fullDesc}"
 
+/-- Format a flag with custom indentation (for subcommand details) -/
+private def formatFlagIndented (f : Flag) (config : HelpConfig) (indent : Nat) : String :=
+  let indentStr := String.mk (List.replicate indent ' ')
+  let shortStr := match f.short with
+    | some c => s!"-{c}, "
+    | none => "    "
+  let longStr := s!"--{f.long}"
+  -- Simplify type display: show <VALUE> for choices, otherwise show type
+  let typeStr := match f.argType with
+    | some (.choice _) => " <VALUE>"
+    | some t => s!" <{t}>"
+    | none => ""
+  let pref := s!"{shortStr}{longStr}{typeStr}"
+  -- Use wider column for subcommand flags
+  let targetCol := config.descColumn + 4
+  let padding := if pref.length < targetCol
+    then String.mk (List.replicate (targetCol - pref.length) ' ')
+    else "  "
+  s!"{indentStr}{pref}{padding}{f.description}"
+
 /-- Format a positional argument for help display -/
 private def formatArg (a : Arg) (config : HelpConfig) : String :=
   let reqStr := if a.required then "" else " (optional)"
@@ -79,6 +101,28 @@ private def formatSubcmd (c : Command) (config : HelpConfig) : String :=
     s!"  {pref}\n{String.mk (List.replicate (config.descColumn + 2) ' ')}{c.description}"
   else
     s!"  {paddedPref}{c.description}"
+
+/-- Format a subcommand with full details (args and flags) -/
+private def formatSubcmdFull (c : Command) (config : HelpConfig) : String :=
+  -- Build usage: "add <title> [comment]"
+  let argStr := c.args.toList.map (fun a =>
+    if a.required then s!"<{a.name}>" else s!"[{a.name}]"
+  ) |> " ".intercalate
+  let nameWithArgs := if argStr.isEmpty then c.name else s!"{c.name} {argStr}"
+
+  -- First line: name with args and description
+  let padding := if nameWithArgs.length < config.descColumn
+    then String.mk (List.replicate (config.descColumn - nameWithArgs.length) ' ')
+    else " "
+  let headerLine := s!"  {nameWithArgs}{padding}{c.description}"
+
+  -- Flag lines (indented by 4)
+  let flagLines := c.flags.toList.map (formatFlagIndented · config 4)
+
+  if flagLines.isEmpty then
+    headerLine
+  else
+    "\n".intercalate ([headerLine] ++ flagLines)
 
 /-- Generate usage string for a command -/
 def Command.usage (cmd : Command) (programName : Option String := none) : String :=
@@ -125,6 +169,10 @@ def Command.helpText (cmd : Command) (config : HelpConfig := {}) : String :=
   -- Commands section
   let cmdsLines :=
     if cmd.subcommands.isEmpty then []
+    else if config.showSubcommandDetails then
+      -- Full details: join with blank lines for readability
+      let formatted := cmd.subcommands.toList.map (formatSubcmdFull · config)
+      ["Commands:", "\n\n".intercalate formatted, ""]
     else
       let formatted := cmd.subcommands.toList.map (formatSubcmd · config)
       ["Commands:"] ++ formatted ++ [""]
