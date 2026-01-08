@@ -65,6 +65,18 @@ def addRemaining (value : String) : ParserM Unit := do
   let state ← get
   set { state with remaining := state.remaining ++ [value] }
 
+/-- Prepend tokens to be processed next -/
+def prependTokens (tokens : List Token) : ParserM Unit := do
+  if tokens.isEmpty then
+    pure ()
+  else
+    modify fun state => { state with tokens := tokens ++ state.tokens }
+
+/-- Enqueue a short-flag tail (from -abc) for parsing -/
+def enqueueShortTail (tail : String) : ParserM Unit := do
+  let tokens := tokenizeShortGroup tail
+  prependTokens tokens
+
 /-- Try to consume a flag value from the next token -/
 def consumeFlagValue (flagName : String) : ParserM String := do
   let next ← advance
@@ -180,11 +192,18 @@ def parseToken (token : Token) : ParserM Unit :=
   | .longFlagValue name value => parseLongFlagValue name value
   | .shortFlagValue c value => do
     let state ← get
+
+    -- Built-in flags
+    if c == 'h' then
+      throw .helpRequested
+    if c == 'V' then
+      throw .versionRequested
+
     match state.currentCommand.findFlagShort c with
     | some flag =>
       if flag.isBoolean then
         setBool flag.long
-        addRemaining value
+        enqueueShortTail value
       else
         if flag.repeatable then
           addValue flag.long value

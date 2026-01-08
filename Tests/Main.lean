@@ -53,6 +53,12 @@ test "tokenize long flag with value" :=
 test "tokenize short flags" :=
   tokenize ["-v"] ≡ [.shortFlag 'v']
 
+test "tokenize short flag with attached value" :=
+  tokenize ["-ofile"] ≡ [.shortFlagValue 'o' "file"]
+
+test "tokenize short flag group" :=
+  tokenize ["-abc"] ≡ [.shortFlagValue 'a' "bc"]
+
 test "tokenize positional" :=
   tokenize ["file.txt"] ≡ [.positional "file.txt"]
 
@@ -85,6 +91,31 @@ test "parse boolean flag" := do
   match parse cmd ["--verbose"] with
   | .ok result => shouldSatisfy (result.hasFlag "verbose") "should have verbose flag"
   | .error _ => throw (IO.userError "Expected success")
+
+test "parse short flag with attached value" := do
+  let cmd := command "test" do
+    Cmd.flag "output" (short := some 'o')
+  match parse cmd ["-ofile"] with
+  | .ok result =>
+    let val := result.getString "output"
+    if val != some "file" then
+      throw (IO.userError s!"Expected some \"file\", got {repr val}")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parse short flag cluster with value tail" := do
+  let cmd := command "test" do
+    Cmd.boolFlag "all" (short := some 'a')
+    Cmd.flag "output" (short := some 'o')
+  match parse cmd ["-aofile"] with
+  | .ok result =>
+    if !result.hasFlag "all" then
+      throw (IO.userError "Expected -a to be set")
+    let val := result.getString "output"
+    if val != some "file" then
+      throw (IO.userError s!"Expected some \"file\", got {repr val}")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
 
 test "parse help flag" := do
   let cmd := command "test" do

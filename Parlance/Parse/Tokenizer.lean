@@ -12,7 +12,7 @@ inductive Token where
   | longFlag (name : String)
   /-- Long flag with value like --output=file -/
   | longFlagValue (name : String) (value : String)
-  /-- Short flag with attached value like -ofile -/
+  /-- Short flag with attached value or cluster like -ofile or -abc -/
   | shortFlagValue (c : Char) (value : String)
   /-- Positional argument or flag value -/
   | positional (value : String)
@@ -48,6 +48,13 @@ private def findCharIndex (s : String) (c : Char) : Option Nat :=
   let chars := s.toList
   chars.findIdx? (· == c)
 
+/-- Tokenize the body of a short-flag argument (no leading '-') -/
+def tokenizeShortGroup (body : String) : List Token :=
+  match body.toList with
+  | [] => []
+  | [c] => [.shortFlag c]
+  | c :: rest => [.shortFlagValue c (String.ofList rest)]
+
 /-- Tokenize a single argument string -/
 def tokenizeOne (arg : String) (afterEndOfFlags : Bool) : List Token :=
   if afterEndOfFlags then
@@ -64,10 +71,7 @@ def tokenizeOne (arg : String) (afterEndOfFlags : Bool) : List Token :=
     | none =>
       [.longFlag rest]
   else if arg.startsWith "-" && arg.length > 1 then
-    let chars := (arg.drop 1).toList
-    -- For now, treat each character as a separate short flag
-    -- A smarter tokenizer would handle -ovalue style
-    chars.map Token.shortFlag
+    tokenizeShortGroup (arg.drop 1)
   else
     [.positional arg]
 
