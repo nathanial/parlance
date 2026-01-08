@@ -92,6 +92,33 @@ test "parse boolean flag" := do
   | .ok result => shouldSatisfy (result.hasFlag "verbose") "should have verbose flag"
   | .error _ => throw (IO.userError "Expected success")
 
+test "parse choice flag valid" := do
+  let cmd := command "test" do
+    Cmd.flag "format" (argType := .choice ["json", "yaml"])
+  match parse cmd ["--format", "json"] with
+  | .ok result => result.getString "format" ≡ some "json"
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parse choice flag invalid" := do
+  let cmd := command "test" do
+    Cmd.flag "format" (argType := .choice ["json", "yaml"])
+  match parse cmd ["--format", "toml"] with
+  | .ok _ => throw (IO.userError "Expected invalid choice error")
+  | .error e =>
+    match e with
+    | .invalidChoice "format" "toml" ["json", "yaml"] => pure ()
+    | _ => throw (IO.userError s!"Expected invalidChoice, got {e}")
+
+test "parse choice positional invalid" := do
+  let cmd := command "test" do
+    Cmd.arg "mode" (argType := .choice ["fast", "slow"])
+  match parse cmd ["turbo"] with
+  | .ok _ => throw (IO.userError "Expected invalid choice error")
+  | .error e =>
+    match e with
+    | .invalidChoice "mode" "turbo" ["fast", "slow"] => pure ()
+    | _ => throw (IO.userError s!"Expected invalidChoice, got {e}")
+
 test "parse short flag with attached value" := do
   let cmd := command "test" do
     Cmd.flag "output" (short := some 'o')
