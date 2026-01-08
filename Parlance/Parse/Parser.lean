@@ -60,6 +60,13 @@ def setBool (name : String) : ParserM Unit := do
   let state ← get
   set { state with values := state.values.setBool name }
 
+/-- Record a boolean flag as false (for --no-<flag>) -/
+def setBoolFalse (name : String) : ParserM Unit := do
+  let state ← get
+  let cleared := state.values.clearBool name
+  let updated := cleared.setValue name "false"
+  set { state with values := updated }
+
 /-- Add to remaining positional args -/
 def addRemaining (value : String) : ParserM Unit := do
   let state ← get
@@ -105,6 +112,22 @@ def consumeFlagValue (flagName : String) : ParserM String := do
     throw (.missingValue flagName)
   | none => throw (.missingValue flagName)
 
+/-- Parse a negated long flag like --no-<flag>. -/
+def parseNegatedLongFlag (name : String) : ParserM Unit := do
+  let state ← get
+  let cmd := state.currentCommand
+  if name.startsWith "no-" then
+    let base := name.drop 3
+    match cmd.findFlagLong base with
+    | some flag =>
+      if flag.isBoolean && flag.negatable then
+        setBoolFalse flag.long
+      else
+        throw (.unknownFlag name)
+    | none => throw (.unknownFlag name)
+  else
+    throw (.unknownFlag name)
+
 /-- Parse a long flag -/
 def parseLongFlag (name : String) : ParserM Unit := do
   let state ← get
@@ -127,7 +150,7 @@ def parseLongFlag (name : String) : ParserM Unit := do
         addValue flag.long value
       else
         setValue flag.long value
-  | none => throw (.unknownFlag name)
+  | none => parseNegatedLongFlag name
 
 /-- Parse a long flag with attached value -/
 def parseLongFlagValue (name : String) (value : String) : ParserM Unit := do
@@ -147,7 +170,7 @@ def parseLongFlagValue (name : String) (value : String) : ParserM Unit := do
         addValue flag.long value
       else
         setValue flag.long value
-  | none => throw (.unknownFlag name)
+  | none => parseNegatedLongFlag name
 
 /-- Parse a short flag -/
 def parseShortFlag (c : Char) : ParserM Unit := do

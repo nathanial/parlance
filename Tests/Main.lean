@@ -92,6 +92,28 @@ test "parse boolean flag" := do
   | .ok result => shouldSatisfy (result.hasFlag "verbose") "should have verbose flag"
   | .error _ => throw (IO.userError "Expected success")
 
+test "parse negatable boolean flag" := do
+  let cmd := command "test" do
+    Cmd.boolFlag "color" (negatable := true)
+  match parse cmd ["--no-color"] with
+  | .ok result =>
+    if result.hasFlag "color" then
+      throw (IO.userError "Expected color flag to be unset")
+    if result.getBool "color" != false then
+      throw (IO.userError "Expected color flag to be false")
+    pure ()
+  | .error e => throw (IO.userError s!"Expected success, got error: {e}")
+
+test "parse negation errors when not enabled" := do
+  let cmd := command "test" do
+    Cmd.boolFlag "color"
+  match parse cmd ["--no-color"] with
+  | .ok _ => throw (IO.userError "Expected unknown flag error")
+  | .error e =>
+    match e with
+    | .unknownFlag "no-color" => pure ()
+    | _ => throw (IO.userError s!"Expected unknownFlag, got {e}")
+
 test "parse choice flag valid" := do
   let cmd := command "test" do
     Cmd.flag "format" (argType := .choice ["json", "yaml"])
@@ -245,6 +267,8 @@ end Tests.CommandBuilder
 -- Help Generation Tests
 namespace Tests.HelpGeneration
 
+open Staple (String.containsSubstr)
+
 testSuite "HelpGeneration"
 
 test "Command.usage simple" := do
@@ -255,6 +279,12 @@ test "Command.usage with flags" := do
   let cmd := command "myapp" do
     Cmd.boolFlag "verbose"
   cmd.usage ≡ "myapp [OPTIONS]"
+
+test "help text shows negatable flag" := do
+  let cmd := command "myapp" do
+    Cmd.boolFlag "color" (negatable := true)
+  let help := cmd.helpText
+  shouldSatisfy (help.containsSubstr "--[no-]color") "help should include negatable flag"
 
 #generate_tests
 

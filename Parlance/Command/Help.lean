@@ -29,7 +29,7 @@ private def formatFlag (f : Flag) (config : HelpConfig) : String :=
   let shortStr := match f.short with
     | some c => s!"-{c}, "
     | none => "    "
-  let longStr := s!"--{f.long}"
+  let longStr := if f.isBoolean && f.negatable then s!"--[no-]{f.long}" else s!"--{f.long}"
   let typeStr := match f.argType with
     | some t => s!" <{t}>"
     | none => ""
@@ -58,7 +58,7 @@ private def formatFlagIndented (f : Flag) (config : HelpConfig) (indent : Nat) :
   let shortStr := match f.short with
     | some c => s!"-{c}, "
     | none => "    "
-  let longStr := s!"--{f.long}"
+  let longStr := if f.isBoolean && f.negatable then s!"--[no-]{f.long}" else s!"--{f.long}"
   -- Simplify type display: show <VALUE> for choices, otherwise show type
   let typeStr := match f.argType with
     | some (.choice _) => " <VALUE>"

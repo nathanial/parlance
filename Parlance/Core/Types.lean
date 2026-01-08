@@ -48,6 +48,8 @@ structure Flag where
   envVar : Option String := none
   /-- Whether this flag can be specified multiple times -/
   repeatable : Bool := false
+  /-- Whether this boolean flag supports --no-<flag> -/
+  negatable : Bool := false
   deriving Repr, BEq, Inhabited
 
 namespace Flag
@@ -129,8 +131,14 @@ def setValue (pv : ParsedValues) (name : String) (value : String) : ParsedValues
   { pv with values := filtered ++ [(name, value)] }
 
 def setBool (pv : ParsedValues) (name : String) : ParsedValues :=
-  if pv.boolFlags.contains name then pv
-  else { pv with boolFlags := pv.boolFlags ++ [name] }
+  let filtered := pv.values.filter (·.1 != name)
+  if pv.boolFlags.contains name then
+    { pv with values := filtered }
+  else
+    { pv with values := filtered, boolFlags := pv.boolFlags ++ [name] }
+
+def clearBool (pv : ParsedValues) (name : String) : ParsedValues :=
+  { pv with boolFlags := pv.boolFlags.filter (· != name) }
 
 def getValue (pv : ParsedValues) (name : String) : Option String :=
   pv.values.find? (·.1 == name) |>.map (·.2)

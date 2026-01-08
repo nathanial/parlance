@@ -41,7 +41,8 @@ def description (d : String) : CommandM Unit :=
 /-- Add a boolean flag (no value required) -/
 def boolFlag (long : String) (short : Option Char := none)
     (description : String := "")
-    (envVar : Option String := none) : CommandM Unit :=
+    (envVar : Option String := none)
+    (negatable : Bool := false) : CommandM Unit :=
   modify fun s => { s with
     flags := s.flags.push {
       long := long
@@ -50,6 +51,7 @@ def boolFlag (long : String) (short : Option Char := none)
       description := description
       required := false
       envVar := envVar
+      negatable := negatable
     }
   }
 
@@ -143,8 +145,9 @@ def description (d : String) : CommandM Unit := CommandM.description d
 
 def boolFlag (long : String) (short : Option Char := none)
     (description : String := "")
-    (envVar : Option String := none) : CommandM Unit :=
-  CommandM.boolFlag long short description envVar
+    (envVar : Option String := none)
+    (negatable : Bool := false) : CommandM Unit :=
+  CommandM.boolFlag long short description envVar negatable
 
 def flag (long : String) (short : Option Char := none)
     (argType : ArgType := .string)
