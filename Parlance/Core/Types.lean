@@ -50,7 +50,9 @@ structure Flag where
   repeatable : Bool := false
   /-- Whether this boolean flag supports --no-<flag> -/
   negatable : Bool := false
-  deriving Repr, BEq, Inhabited
+  /-- Custom validation function -/
+  validate : Option (String → Except String Unit) := none
+  deriving Inhabited
 
 namespace Flag
 
@@ -75,7 +77,9 @@ structure Arg where
   required : Bool := true
   /-- Default value if not provided -/
   defaultValue : Option String := none
-  deriving Repr, BEq, Inhabited
+  /-- Custom validation function -/
+  validate : Option (String → Except String Unit) := none
+  deriving Inhabited
 
 /-- A complete command definition -/
 structure Command where
@@ -91,7 +95,7 @@ structure Command where
   args : Array Arg := #[]
   /-- Available subcommands -/
   subcommands : Array Command := #[]
-  deriving Repr, Inhabited
+  deriving Inhabited
 
 namespace Command
 

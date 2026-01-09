@@ -22,6 +22,8 @@ inductive ParseError where
   | tooManyPositional (max : Nat) (got : Nat)
   /-- Value not in allowed choices -/
   | invalidChoice (flag : String) (value : String) (options : List String)
+  /-- Custom validation failed -/
+  | validationFailed (name : String) (value : String) (message : String)
   /-- Help was requested -/
   | helpRequested
   /-- Version was requested -/
@@ -40,6 +42,7 @@ def toString : ParseError → String
     s!"Unknown command: {c}{availStr}"
   | .tooManyPositional m g => s!"Too many positional arguments: expected at most {m}, got {g}"
   | .invalidChoice f v opts => s!"Invalid value '{v}' for '--{f}': must be one of [{", ".intercalate opts}]"
+  | .validationFailed n v msg => s!"Validation failed for '{n}' with value '{v}': {msg}"
   | .helpRequested => "Help requested"
   | .versionRequested => "Version requested"
 

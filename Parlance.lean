@@ -16,3 +16,4 @@ import Parlance.Output
 import Parlance.Completion
 import Parlance.Markdown
 import Parlance.Wrap
+import Parlance.Validate

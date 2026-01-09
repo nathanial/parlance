@@ -88,6 +88,15 @@ def validateChoice? (name : String) (argType : Option ArgType) (value : String) 
   | some t => validateChoice name t value
   | none => pure ()
 
+/-- Run custom validator if present -/
+def runValidator (name : String) (value : String) (validate : Option (String → Except String Unit)) : ParserM Unit := do
+  match validate with
+  | some f =>
+    match f value with
+    | .ok () => pure ()
+    | .error msg => throw (.validationFailed name value msg)
+  | none => pure ()
+
 /-- Prepend tokens to be processed next -/
 def prependTokens (tokens : List Token) : ParserM Unit := do
   if tokens.isEmpty then
@@ -146,6 +155,7 @@ def parseLongFlag (name : String) : ParserM Unit := do
     else
       let value ← consumeFlagValue flag.long
       validateChoice? flag.long flag.argType value
+      runValidator flag.long value flag.validate
       if flag.repeatable then
         addValue flag.long value
       else
@@ -166,6 +176,7 @@ def parseLongFlagValue (name : String) (value : String) : ParserM Unit := do
       -- Otherwise, don't set (treat as false)
     else
       validateChoice? flag.long flag.argType value
+      runValidator flag.long value flag.validate
       if flag.repeatable then
         addValue flag.long value
       else
@@ -190,6 +201,7 @@ def parseShortFlag (c : Char) : ParserM Unit := do
     else
       let value ← consumeFlagValue flag.long
       validateChoice? flag.long flag.argType value
+      runValidator flag.long value flag.validate
       if flag.repeatable then
         addValue flag.long value
       else
@@ -221,6 +233,7 @@ def parsePositional (value : String) : ParserM Unit := do
   if h : state.positionalIndex < cmd.args.size then
     let arg := cmd.args[state.positionalIndex]
     validateChoice arg.name arg.argType value
+    runValidator arg.name value arg.validate
     setValue arg.name value
     -- Get fresh state after setValue, otherwise we overwrite the value
     modify fun s => { s with positionalIndex := s.positionalIndex + 1 }
@@ -249,6 +262,7 @@ def parseToken (token : Token) : ParserM Unit :=
         enqueueShortTail value
       else
         validateChoice? flag.long flag.argType value
+        runValidator flag.long value flag.validate
         if flag.repeatable then
           addValue flag.long value
         else
@@ -279,6 +293,7 @@ def applyDefaults : ParserM Unit := do
         else state.values.getValue flag.long |>.isSome || state.values.hasBool flag.long
       if !hasExisting then
         validateChoice? flag.long flag.argType dflt
+        runValidator flag.long dflt flag.validate
         if flag.repeatable then
           addValue flag.long dflt
         else
@@ -289,6 +304,7 @@ def applyDefaults : ParserM Unit := do
     if let some dflt := arg.defaultValue then
       if state.values.getValue arg.name |>.isNone then
         validateChoice arg.name arg.argType dflt
+        runValidator arg.name dflt arg.validate
         setValue arg.name dflt
 
 /-- Apply defaults with environment variable lookup -/
@@ -312,6 +328,7 @@ def applyDefaultsWithEnv (getEnv : String → Option String) : ParserM Unit := d
               setBool flag.long
           else
             validateChoice? flag.long flag.argType envValue
+            runValidator flag.long envValue flag.validate
             if flag.repeatable then
               addValue flag.long envValue
             else
@@ -320,6 +337,7 @@ def applyDefaultsWithEnv (getEnv : String → Option String) : ParserM Unit := d
       -- Then try default value
       if let some dflt := flag.defaultValue then
         validateChoice? flag.long flag.argType dflt
+        runValidator flag.long dflt flag.validate
         if flag.repeatable then
           addValue flag.long dflt
         else
@@ -330,6 +348,7 @@ def applyDefaultsWithEnv (getEnv : String → Option String) : ParserM Unit := d
     if let some dflt := arg.defaultValue then
       if state.values.getValue arg.name |>.isNone then
         validateChoice arg.name arg.argType dflt
+        runValidator arg.name dflt arg.validate
         setValue arg.name dflt
 
 /-- Validate required flags and arguments -/

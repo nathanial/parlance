@@ -61,7 +61,8 @@ def flag (long : String) (short : Option Char := none)
     (description : String := "")
     (defaultValue : Option String := none)
     (required : Bool := false)
-    (envVar : Option String := none) : CommandM Unit :=
+    (envVar : Option String := none)
+    (validate : Option (String → Except String Unit) := none) : CommandM Unit :=
   modify fun s => { s with
     flags := s.flags.push {
       long := long
@@ -71,6 +72,7 @@ def flag (long : String) (short : Option Char := none)
       defaultValue := defaultValue
       required := required
       envVar := envVar
+      validate := validate
     }
   }
 
@@ -80,7 +82,8 @@ def repeatableFlag (long : String) (short : Option Char := none)
     (description : String := "")
     (defaultValue : Option String := none)
     (required : Bool := false)
-    (envVar : Option String := none) : CommandM Unit :=
+    (envVar : Option String := none)
+    (validate : Option (String → Except String Unit) := none) : CommandM Unit :=
   modify fun s => { s with
     flags := s.flags.push {
       long := long
@@ -91,6 +94,7 @@ def repeatableFlag (long : String) (short : Option Char := none)
       required := required
       envVar := envVar
       repeatable := true
+      validate := validate
     }
   }
 
@@ -98,7 +102,8 @@ def repeatableFlag (long : String) (short : Option Char := none)
 def arg (name : String) (argType : ArgType := .string)
     (description : String := "")
     (required : Bool := true)
-    (defaultValue : Option String := none) : CommandM Unit :=
+    (defaultValue : Option String := none)
+    (validate : Option (String → Except String Unit) := none) : CommandM Unit :=
   modify fun s => { s with
     args := s.args.push {
       name := name
@@ -106,6 +111,7 @@ def arg (name : String) (argType : ArgType := .string)
       description := description
       required := required
       defaultValue := defaultValue
+      validate := validate
     }
   }
 
@@ -154,22 +160,25 @@ def flag (long : String) (short : Option Char := none)
     (description : String := "")
     (defaultValue : Option String := none)
     (required : Bool := false)
-    (envVar : Option String := none) : CommandM Unit :=
-  CommandM.flag long short argType description defaultValue required envVar
+    (envVar : Option String := none)
+    (validate : Option (String → Except String Unit) := none) : CommandM Unit :=
+  CommandM.flag long short argType description defaultValue required envVar validate
 
 def repeatableFlag (long : String) (short : Option Char := none)
     (argType : ArgType := .string)
     (description : String := "")
     (defaultValue : Option String := none)
     (required : Bool := false)
-    (envVar : Option String := none) : CommandM Unit :=
-  CommandM.repeatableFlag long short argType description defaultValue required envVar
+    (envVar : Option String := none)
+    (validate : Option (String → Except String Unit) := none) : CommandM Unit :=
+  CommandM.repeatableFlag long short argType description defaultValue required envVar validate
 
 def arg (name : String) (argType : ArgType := .string)
     (description : String := "")
     (required : Bool := true)
-    (defaultValue : Option String := none) : CommandM Unit :=
-  CommandM.arg name argType description required defaultValue
+    (defaultValue : Option String := none)
+    (validate : Option (String → Except String Unit) := none) : CommandM Unit :=
+  CommandM.arg name argType description required defaultValue validate
 
 def subcommand (name : String) (builder : CommandM Unit) : CommandM Unit :=
   CommandM.subcommand name builder
