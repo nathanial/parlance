@@ -33,7 +33,6 @@ test "ParsedValues setBool and hasBool" := do
   shouldSatisfy (pv.hasBool "verbose") "should have verbose"
   shouldSatisfy (!pv.hasBool "debug") "should not have debug"
 
-#generate_tests
 
 end Tests.CoreTypes
 
@@ -65,7 +64,6 @@ test "tokenize positional" :=
 test "tokenize end of flags" :=
   tokenize ["--", "--not-a-flag"] ≡ [.endOfFlags, .positional "--not-a-flag"]
 
-#generate_tests
 
 end Tests.Tokenizer
 
@@ -182,7 +180,6 @@ test "parse unknown flag error" := do
     | .unknownFlag "unknown" => pure ()
     | _ => throw (IO.userError s!"Expected unknownFlag, got {e}")
 
-#generate_tests
 
 end Tests.Parser
 
@@ -218,7 +215,6 @@ test "FromArg Float integer" :=
 test "FromArg Float negative integer" :=
   FromArg.parse (α := Float) "-42" ≡ some (-42.0)
 
-#generate_tests
 
 end Tests.Extractor
 
@@ -238,7 +234,6 @@ test "Style isEmpty default" :=
 test "Style isEmpty bold" :=
   Style.bold.isEmpty ≡ false
 
-#generate_tests
 
 end Tests.Style
 
@@ -260,7 +255,6 @@ test "build command with flags" := do
     Cmd.flag "output" (argType := .path)
   cmd.flags.size ≡ 2
 
-#generate_tests
 
 end Tests.CommandBuilder
 
@@ -286,7 +280,6 @@ test "help text shows negatable flag" := do
   let help := cmd.helpText
   shouldSatisfy (help.containsSubstr "--[no-]color") "help should include negatable flag"
 
-#generate_tests
 
 end Tests.HelpGeneration
 
@@ -391,7 +384,6 @@ test "help text includes env var info" := do
   let help := cmd.helpText
   shouldSatisfy (help.containsSubstr "[env: API_TOKEN]") "help should contain env var info"
 
-#generate_tests
 
 end Tests.EnvVar
 
@@ -508,7 +500,6 @@ test "required repeatable flag satisfied with one value" := do
     values ≡ ["path1"]
   | .error e => throw (IO.userError s!"Expected success, got error: {e}")
 
-#generate_tests
 
 end Tests.RepeatableFlags
 
@@ -522,7 +513,6 @@ test "Table.simple creation" := do
   t.columns.size ≡ 2
   t.rows.size ≡ 2
 
-#generate_tests
 
 end Tests.Tables
 
@@ -669,7 +659,6 @@ test "handleCompletionRequest returns none for invalid shell" := do
   let result := handleCompletionRequest testCmd "myapp" ["--generate-completion", "invalid"]
   shouldSatisfy result.isNone "should return none for invalid shell"
 
-#generate_tests
 
 end Tests.Completion
 
@@ -786,7 +775,6 @@ test "clear resets buffer" := do
   lb'.content ≡ ""
   lb'.cursor ≡ 0
 
-#generate_tests
 
 end Tests.LineBuffer
 
@@ -826,7 +814,6 @@ test "KeyCode toChar on non-char" := do
   let code := KeyCode.enter
   shouldBeNone code.toChar
 
-#generate_tests
 
 end Tests.ReplInput
 
@@ -886,7 +873,6 @@ test "mixed content" := do
   shouldSatisfy (result.containsSubstr "italic") "should have italic text"
   shouldSatisfy (result.containsSubstr " text.") "should have trailing text"
 
-#generate_tests
 
 end Tests.Markdown
 
